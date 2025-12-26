@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ScoreInqui - Scoring BCRA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #f8f9fa; margin: 0; padding: 0; color: #333; }
+    .container { max-width: 600px; margin: 80px auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+    h1 { color: #1a73e8; text-align: center; margin-bottom: 10px; }
+    p.subtitle { color: #666; text-align: center; margin-bottom: 30px; }
+    form { display: flex; flex-direction: column; gap: 20px; text-align: left; }
+    label { font-weight: 500; }
+    input { padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
+    button { background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 6px; font-size: 16px; cursor: pointer; transition: background 0.3s; }
+    button:hover { background: #0d5bd9; }
+    #result { margin-top: 40px; padding: 20px; background: #e8f0fe; border-radius: 8px; display: none; }
+    .score { font-size: 48px; font-weight: bold; text-align: center; color: #1a73e8; margin: 0 0 20px; }
+    .error { color: red; text-align: center; }
+    .info { font-size: 14px; color: #666; margin-top: 30px; text-align: center; }
+    .detail-item { margin-bottom: 12px; }
+    .loading { text-align: center; color: #666; margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ScoreInqui</h1>
+    <p class="subtitle">Scoring gratuito con datos públicos del BCRA</p>
+
+    <form id="form">
+      <label for="cuil">DNI o CUIL del inquilino</label>
+      <input type="text" id="cuil" placeholder="Ej: 20123456789" required pattern="\d{7,11}">
+      <button type="submit">Consultar</button>
+    </form>
+
+    <div id="loading" class="loading" style="display:none;">Consultando BCRA... Por favor espera.</div>
+
+    <div id="result">
+      <h3>Resultado del Scoring</h3>
+      <div class="score" id="scoreValue">—</div>
+      <div id="details"></div>
+    </div>
+
+    <p class="info">Datos de Central de Deudores del BCRA (públicos). Próximamente: Prometeo para datos bancarios (con consentimiento).</p>
+  </div>
+
+  <script>
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const cuil = document.getElementById('cuil').value.trim().replace(/-/g, '');
+      const loading = document.getElementById('loading');
+      const resultDiv = document.getElementById('result');
+      const scoreValue = document.getElementById('scoreValue');
+      const details = document.getElementById('details');
+
+      loading.style.display = 'block';
+      resultDiv.style.display = 'none';
+      scoreValue.textContent = 'Cargando...';
+      details.innerHTML = '';
+
+      try {
+        // Función auxiliar para fetch con timeout
+        const fetchWithTimeout = async (url, timeout = 15000) => {
+          const controller = new AbortController();
+          const id = setTimeout(() => controller.abort(), timeout);
+          const response = await fetch(url, { signal: controller.signal, mode: 'cors' });
+          clearTimeout(id);
+          return response;
+        };
+
+        // 1. Deudas actuales
+        let deudasActuales = { deudas: [] };
+        try {
+          const resDeudas = await fetchWithTimeout(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/${cuil}`);
+          if (resDeudas.ok) deudasActuales = await resDeudas.json();
+        } catch (err) { console.log('Deudas actuales:', err.message); }
+
+        // 2. Deudas históricas (últimos 24 meses)
+        let historicas = [];
+        try {
+          const resHistoricas = await fetchWithTimeout(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/Historicas/${cuil}`);
+          if (resHistoricas.ok) historicas = (await resHistoricas.json()).deudas || [];
+        } catch (err) { console.log('Históricas:', err.message); }
+
+        // 3. Cheques rechazados
+        let cheques = [];
+        try {
+          const resCheques = await fetchWithTimeout(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/ChequesRechazados/${cuil}`);
+          if (resCheques.ok) cheques = (await resCheques.json()).cheques || [];
+        } catch (err) { console.log('Cheques:', err.message); }
+
+        // Lógica de scoring (puedes ajustar pesos)
+        let score = 950; // Muy bajo riesgo por default
+        let mensajes = [];
+
+        // Deudas actuales
+        if (deudasActuales.deudas?.length > 0) {
+          const totalDeuda = deudasActuales.deudas.reduce((sum, d) => sum + (d.monto || 0), 0);
+          const tieneAtraso = deudasActuales.deudas.some(d => d.diasAtraso > 0);
+          if (tieneAtraso) {
+            score -= 200;
+            mensajes.push(`Riesgo medio: ${deudasActuales.deudas.length} deuda(s) con atrasos`);
+          }
+          mensajes.push(`Deuda total actual: ${totalDeuda.toLocaleString()} pesos`);
+        }
+
+        // Históricas
+        if (historicas.length > 0) {
+          const historicoAtrasos = historicas.filter(h => h.diasAtraso > 0).length;
+          if (historicoAtrasos > 0) {
+            score -= 150;
+            mensajes.push(`Riesgo adicional: ${historicoAtrasos} meses con atrasos en últimos 24`);
+          }
+        }
+
+        // Cheques rechazados
+        if (cheques.length > 0) {
+          score -= 200;
+          mensajes.push(`Alto riesgo: ${cheques.length} cheque(s) rechazado(s)`);
+        }
+
+        score = Math.max(0, Math.min(1000, score)); // Limita entre 0 y 1000
+
+        // Mostrar resultado
+        scoreValue.textContent = score;
+        details.innerHTML = mensajes.length > 0 
+          ? mensajes.map(m => `<div class="detail-item">${m}</div>`).join('')
+          : '<div class="detail-item">Sin incidencias registradas (bajo riesgo)</div>';
+
+      } catch (err) {
+        scoreValue.textContent = 'Error';
+        details.innerHTML = `<span class="error">No se pudo conectar a BCRA: ${err.message}</span>`;
+      } finally {
+        loading.style.display = 'none';
+        resultDiv.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>
