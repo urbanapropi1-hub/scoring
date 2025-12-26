@@ -15,12 +15,15 @@
     input { padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
     button { background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 6px; font-size: 16px; cursor: pointer; transition: background 0.3s; }
     button:hover { background: #0d5bd9; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
     #result { margin-top: 40px; padding: 20px; background: #e8f0fe; border-radius: 8px; display: none; }
-    .score { font-size: 48px; font-weight: bold; text-align: center; color: #1a73e8; margin: 0 0 20px; }
+    .score { font-size: 48px; font-weight: bold; text-align: center; margin: 0 0 20px; }
     .error { color: red; text-align: center; }
     .info { font-size: 14px; color: #666; margin-top: 30px; text-align: center; }
     .detail-item { margin-bottom: 12px; }
-    .loading { text-align: center; color: #666; margin: 20px 0; }
+    .loading { text-align: center; color: #1a73e8; margin: 20px 0; font-weight: bold; }
+    .consent-label { font-size: 14px; color: #555; }
+    .new-query { background: #28a745; margin-top: 20px; }
   </style>
 </head>
 <body>
@@ -31,7 +34,13 @@
     <form id="form">
       <label for="cuil">DNI o CUIL del inquilino</label>
       <input type="text" id="cuil" placeholder="Ej: 20123456789" required pattern="\d{7,11}">
-      <button type="submit">Consultar</button>
+      
+      <label class="consent-label">
+        <input type="checkbox" id="consent" required>
+        Autorizo la consulta de datos públicos del BCRA y entiendo que no incluye datos privados ni bancarios.
+      </label>
+      
+      <button type="submit" id="btnConsultar" disabled>Consultar</button>
     </form>
 
     <div id="loading" class="loading" style="display:none;">Consultando BCRA... Por favor espera.</div>
@@ -39,13 +48,27 @@
     <div id="result">
       <h3>Resultado del Scoring</h3>
       <div class="score" id="scoreValue">—</div>
+      <div id="category"></div>
       <div id="details"></div>
+      <button class="new-query" onclick="resetForm()">Nueva consulta</button>
     </div>
 
-    <p class="info">Datos de Central de Deudores del BCRA (públicos). Próximamente: Prometeo para datos bancarios (con consentimiento).</p>
+    <p class="info">Datos públicos de Central de Deudores del BCRA. Próximamente: Prometeo para datos bancarios (con consentimiento).</p>
   </div>
 
   <script>
+    // Habilitar botón solo si acepta consentimiento
+    document.getElementById('consent').addEventListener('change', (e) => {
+      document.getElementById('btnConsultar').disabled = !e.target.checked;
+    });
+
+    function resetForm() {
+      document.getElementById('form').reset();
+      document.getElementById('result').style.display = 'none';
+      document.getElementById('btnConsultar').disabled = true;
+      document.getElementById('consent').checked = false;
+    }
+
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
 
@@ -53,56 +76,42 @@
       const loading = document.getElementById('loading');
       const resultDiv = document.getElementById('result');
       const scoreValue = document.getElementById('scoreValue');
+      const categoryDiv = document.getElementById('category');
       const details = document.getElementById('details');
 
       loading.style.display = 'block';
       resultDiv.style.display = 'none';
       scoreValue.textContent = 'Cargando...';
+      categoryDiv.innerHTML = '';
       details.innerHTML = '';
 
       try {
-        // Función auxiliar para fetch con timeout
-        const fetchWithTimeout = async (url, timeout = 15000) => {
-          const controller = new AbortController();
-          const id = setTimeout(() => controller.abort(), timeout);
-          const response = await fetch(url, { signal: controller.signal, mode: 'cors' });
-          clearTimeout(id);
-          return response;
-        };
+        const proxy = 'https://cors-anywhere.herokuapp.com/';
+        const baseUrl = 'https://api.bcra.gob.ar/centraldedeudores/v1.0/';
 
-        // 1. Deudas actuales
         let deudasActuales = { deudas: [] };
-        try {
-          const resDeudas = await fetchWithTimeout(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/${cuil}`);
-          if (resDeudas.ok) deudasActuales = await resDeudas.json();
-        } catch (err) { console.log('Deudas actuales:', err.message); }
+        const resDeudas = await fetch(proxy + baseUrl + 'Deudas/' + cuil);
+        if (resDeudas.ok) deudasActuales = await resDeudas.json();
 
-        // 2. Deudas históricas (últimos 24 meses)
         let historicas = [];
-        try {
-          const resHistoricas = await fetchWithTimeout(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/Historicas/${cuil}`);
-          if (resHistoricas.ok) historicas = (await resHistoricas.json()).deudas || [];
-        } catch (err) { console.log('Históricas:', err.message); }
+        const resHistoricas = await fetch(proxy + baseUrl + 'Deudas/Historicas/' + cuil);
+        if (resHistoricas.ok) historicas = (await resHistoricas.json()).deudas || [];
 
-        // 3. Cheques rechazados
         let cheques = [];
-        try {
-          const resCheques = await fetchWithTimeout(`https://api.bcra.gob.ar/centraldedeudores/v1.0/Deudas/ChequesRechazados/${cuil}`);
-          if (resCheques.ok) cheques = (await resCheques.json()).cheques || [];
-        } catch (err) { console.log('Cheques:', err.message); }
+        const resCheques = await fetch(proxy + baseUrl + 'Deudas/ChequesRechazados/' + cuil);
+        if (resCheques.ok) cheques = (await resCheques.json()).cheques || [];
 
-        // Lógica de scoring (puedes ajustar pesos)
-        let score = 950; // Muy bajo riesgo por default
+        let score = 950;
         let mensajes = [];
 
         // Deudas actuales
         if (deudasActuales.deudas?.length > 0) {
-          const totalDeuda = deudasActuales.deudas.reduce((sum, d) => sum + (d.monto || 0), 0);
           const tieneAtraso = deudasActuales.deudas.some(d => d.diasAtraso > 0);
           if (tieneAtraso) {
             score -= 200;
             mensajes.push(`Riesgo medio: ${deudasActuales.deudas.length} deuda(s) con atrasos`);
           }
+          const totalDeuda = deudasActuales.deudas.reduce((sum, d) => sum + (d.monto || 0), 0);
           mensajes.push(`Deuda total actual: ${totalDeuda.toLocaleString()} pesos`);
         }
 
@@ -121,17 +130,22 @@
           mensajes.push(`Alto riesgo: ${cheques.length} cheque(s) rechazado(s)`);
         }
 
-        score = Math.max(0, Math.min(1000, score)); // Limita entre 0 y 1000
+        score = Math.max(0, Math.min(1000, score));
 
-        // Mostrar resultado
+        // Categoría de riesgo
+        const categoria = score >= 851 ? 'Muy bajo riesgo' :
+                          score >= 701 ? 'Bajo riesgo' :
+                          score >= 501 ? 'Riesgo medio' : 'Alto riesgo';
+
         scoreValue.textContent = score;
+        categoryDiv.innerHTML = `<strong>Categoría:</strong> ${categoria}`;
         details.innerHTML = mensajes.length > 0 
           ? mensajes.map(m => `<div class="detail-item">${m}</div>`).join('')
-          : '<div class="detail-item">Sin incidencias registradas (bajo riesgo)</div>';
+          : '<div class="detail-item">Sin incidencias registradas</div>';
 
       } catch (err) {
         scoreValue.textContent = 'Error';
-        details.innerHTML = `<span class="error">No se pudo conectar a BCRA: ${err.message}</span>`;
+        details.innerHTML = `<span class="error">Error al conectar con BCRA: ${err.message}</span>`;
       } finally {
         loading.style.display = 'none';
         resultDiv.style.display = 'block';
