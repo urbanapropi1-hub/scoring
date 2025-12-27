@@ -34,9 +34,10 @@
     .loading { text-align: center; color: #1a73e8; margin: 20px 0; font-weight: bold; }
     .consent-label { font-size: 14px; color: #555; }
     .new-query { background: #28a745; margin-top: 20px; width: 100%; }
-    .chart-container { margin-top: 40px; height: 400px; text-align: center; }
+    .chart-container { margin-top: 40px; height: 400px; text-align: center; position: relative; }
     .bank-logo { width: 120px; height: auto; margin-bottom: 10px; }
     .bank-name { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #1a73e8; }
+    .no-data { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #666; font-size: 16px; }
   </style>
 </head>
 <body>
@@ -90,6 +91,7 @@
         <div id="bankLogoContainer" class="bank-logo"></div>
         <div class="bank-name" id="bankName">Entidad Bancaria</div>
         <canvas id="deudasChart"></canvas>
+        <div id="noDataMessage" class="no-data" style="display:none;">Sin deudas históricas registradas</div>
       </div>
 
       <button class="new-query" onclick="resetForm()">Nueva consulta</button>
@@ -101,7 +103,7 @@
   <script>
     let gaugeChart, deudasChart;
 
-    // Logos de bancos (más agregados)
+    // Logos de bancos ampliados
     const bankLogos = {
       'Banco de la Nación Argentina': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Banco_Naci%C3%B3n_logo.svg/512px-Banco_Naci%C3%B3n_logo.svg.png',
       'Banco Galicia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Banco_Galicia_logo.svg/512px-Banco_Galicia_logo.svg.png',
@@ -110,7 +112,9 @@
       'Banco Macro': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/Banco_Macro_logo.svg/512px-Banco_Macro_logo.svg.png',
       'Banco Provincia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Banco_Provincia_logo.svg/512px-Banco_Provincia_logo.svg.png',
       'Banco Ciudad': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Banco_Ciudad_logo.svg/512px-Banco_Ciudad_logo.svg.png',
-      'HSBC': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/HSBC_logo.svg/512px-HSBC_logo.svg.png'
+      'HSBC': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/HSBC_logo.svg/512px-HSBC_logo.svg.png',
+      'Banco Patagonia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Banco_Patagonia_logo.svg/512px-Banco_Patagonia_logo.svg.png',
+      'Banco Supervielle': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Banco_Supervielle_logo.svg/512px-Banco_Supervielle_logo.svg.png'
     };
 
     document.getElementById('consent').addEventListener('change', (e) => {
@@ -124,6 +128,7 @@
       document.getElementById('consent').checked = false;
       if (gaugeChart) gaugeChart.destroy();
       if (deudasChart) deudasChart.destroy();
+      document.getElementById('noDataMessage').style.display = 'none';
     }
 
     document.getElementById('form').addEventListener('submit', async (e) => {
@@ -160,7 +165,6 @@
         const resCheques = await fetch(proxy + baseUrl + 'Deudas/ChequesRechazados/' + cuil);
         if (resCheques.ok) cheques = (await resCheques.json()).cheques || [];
 
-        // Lógica de scoring
         let score = 950;
         let mensajes = [];
 
@@ -228,47 +232,53 @@
           ? mensajes.map(m => `<div class="detail-item">${m}</div>`).join('')
           : '<div class="detail-item">Sin incidencias registradas</div>';
 
-        // Gráfico de deudas por entidad (simulado con múltiples líneas)
+        // Gráfico de deudas por entidad (múltiples líneas)
         const deudasCtx = document.getElementById('deudasChart').getContext('2d');
         if (deudasChart) deudasChart.destroy();
 
         const labels = historicas.map(h => h.fecha || 'Mes');
-        const valores = historicas.map(h => h.monto || 0);
 
-        // Simulamos entidades (en producción, BCRA devuelve entidad en datos)
-        const entidades = ['Banco de la Nación Argentina', 'Banco Galicia', 'BBVA']; // Ejemplo
+        // Simulamos entidades y datos (en producción, extrae de deudasActuales.deudas)
+        const entidades = historicas.length > 0 ? ['Banco Nación', 'Banco Galicia', 'BBVA'] : [];
         const colors = ['#1a73e8', '#ff6b6b', '#4ecdc4'];
 
         const datasets = entidades.map((entidad, index) => ({
           label: entidad,
-          data: valores.map(v => v * (0.8 + index * 0.1)), // Simulación de valores por entidad
+          data: labels.map((_, i) => historicas[i]?.monto * (0.8 + index * 0.1) || 0), // Simulación
           borderColor: colors[index],
           backgroundColor: colors[index] + '33',
           tension: 0.4,
           fill: false
         }));
 
-        // Logo de la primera entidad
-        const entidadPrincipal = entidades[0];
-        document.getElementById('bankName').textContent = entidadPrincipal;
-        const logoUrl = bankLogos[entidadPrincipal] || 'https://via.placeholder.com/120?text=Banco';
-        document.getElementById('bankLogoContainer').innerHTML = `<img src="${logoUrl}" alt="${entidadPrincipal}" class="bank-logo">`;
+        if (entidades.length > 0) {
+          // Logo de la primera entidad
+          const entidadPrincipal = entidades[0];
+          document.getElementById('bankName').textContent = entidadPrincipal;
+          const logoUrl = bankLogos[entidadPrincipal] || 'https://via.placeholder.com/120?text=Banco';
+          document.getElementById('bankLogoContainer').innerHTML = `<img src="${logoUrl}" alt="${entidadPrincipal}" class="bank-logo">`;
 
-        deudasChart = new Chart(deudasCtx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: datasets
-          },
-          options: {
-            responsive: true,
-            scales: {
-              y: { beginAtZero: true, title: { display: true, text: 'Monto (ARS)' } },
-              x: { title: { display: true, text: 'Fecha' } }
+          deudasChart = new Chart(deudasCtx, {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: datasets
             },
-            plugins: { legend: { display: true, position: 'top' } }
-          }
-        });
+            options: {
+              responsive: true,
+              scales: {
+                y: { beginAtZero: true, title: { display: true, text: 'Monto (ARS)' } },
+                x: { title: { display: true, text: 'Fecha' } }
+              },
+              plugins: { legend: { display: true, position: 'top' } }
+            }
+          });
+          document.getElementById('noDataMessage').style.display = 'none';
+        } else {
+          document.getElementById('noDataMessage').style.display = 'block';
+          document.getElementById('bankName').textContent = 'Sin entidades registradas';
+          document.getElementById('bankLogoContainer').innerHTML = '';
+        }
 
         resultDiv.style.display = 'block';
 
@@ -280,7 +290,7 @@
       }
     });
 
-    // Logos de bancos (más agregados)
+    // Logos ampliados
     const bankLogos = {
       'Banco de la Nación Argentina': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Banco_Naci%C3%B3n_logo.svg/512px-Banco_Naci%C3%B3n_logo.svg.png',
       'Banco Galicia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Banco_Galicia_logo.svg/512px-Banco_Galicia_logo.svg.png',
@@ -289,7 +299,9 @@
       'Banco Macro': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/Banco_Macro_logo.svg/512px-Banco_Macro_logo.svg.png',
       'Banco Provincia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Banco_Provincia_logo.svg/512px-Banco_Provincia_logo.svg.png',
       'Banco Ciudad': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Banco_Ciudad_logo.svg/512px-Banco_Ciudad_logo.svg.png',
-      'HSBC': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/HSBC_logo.svg/512px-HSBC_logo.svg.png'
+      'HSBC': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/HSBC_logo.svg/512px-HSBC_logo.svg.png',
+      'Banco Patagonia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Banco_Patagonia_logo.svg/512px-Banco_Patagonia_logo.svg.png',
+      'Banco Supervielle': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Banco_Supervielle_logo.svg/512px-Banco_Supervielle_logo.svg.png'
     };
 
     function getGaugeColor(score) {
