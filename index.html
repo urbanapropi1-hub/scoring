@@ -16,6 +16,7 @@
     input { padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
     button { background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 6px; font-size: 16px; cursor: pointer; }
     button:hover { background: #0d5bd9; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
     #result { margin-top: 40px; display: none; }
     .header { text-align: center; margin-bottom: 30px; }
     .cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; margin-bottom: 30px; }
@@ -45,7 +46,13 @@
     <form id="form">
       <label for="cuil">DNI o CUIL del inquilino</label>
       <input type="text" id="cuil" placeholder="Ej: 20123456789" required pattern="\d{7,11}">
-      <button type="submit">Consultar</button>
+      
+      <label class="consent-label">
+        <input type="checkbox" id="consent">
+        Autorizo la consulta de datos públicos del BCRA y entiendo que no incluye datos privados ni bancarios.
+      </label>
+      
+      <button type="submit" id="btnConsultar" disabled>Consultar</button>
     </form>
 
     <div id="loading" class="loading" style="display:none;">Consultando BCRA... Por favor espera.</div>
@@ -104,9 +111,19 @@
       'HSBC': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/HSBC_logo.svg/512px-HSBC_logo.svg.png'
     };
 
+    // Habilitar botón solo si checkbox está marcado
+    const consent = document.getElementById('consent');
+    const btnConsultar = document.getElementById('btnConsultar');
+
+    consent.addEventListener('change', () => {
+      btnConsultar.disabled = !consent.checked;
+    });
+
     function resetForm() {
       document.getElementById('form').reset();
       document.getElementById('result').style.display = 'none';
+      btnConsultar.disabled = true;
+      consent.checked = false;
       if (gaugeChart) gaugeChart.destroy();
       if (deudasChart) deudasChart.destroy();
       document.getElementById('noDataMessage').style.display = 'none';
@@ -131,8 +148,8 @@
       resultDiv.style.display = 'none';
 
       try {
-        const proxy = '/api/proxy?url=';
-        const baseUrl = '/centraldedeudores/v1.0/';
+        const proxy = 'https://cors-anywhere.herokuapp.com/';
+        const baseUrl = 'https://api.bcra.gob.ar/centraldedeudores/v1.0/';
 
         let deudasActuales = { deudas: [] };
         const resDeudas = await fetch(proxy + baseUrl + 'Deudas/' + cuil);
