@@ -10,12 +10,14 @@ export default async function handler(req, res) {
   try {
     const fullUrl = `https://api.bcra.gob.ar${url}`;
     const response = await fetch(fullUrl, {
-      method: req.method,
-      headers: { 'User-Agent': 'ScoreInqui/1.0' }
+      method: req.method || 'GET',
+      headers: {
+        'User-Agent': 'ScoreInqui/1.0 (vercel.app)'
+      }
     });
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: 'Error en BCRA' });
+      return res.status(response.status).json({ error: 'Error en BCRA', status: response.status });
     }
 
     const data = await response.json();
