@@ -2,71 +2,83 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>ScoreInqui Pro - BCRA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scoring BCRA - Inquilinos</title>
     <style>
-        /* (Mantenemos tu CSS anterior pero agregamos mejoras de estado) */
-        body { font-family: 'Inter', sans-serif; background: #f0f2f5; text-align: center; padding: 50px; }
-        .container { max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        input { width: 80%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; font-size: 18px; }
-        button { background: #1a73e8; color: white; border: none; padding: 15px 30px; border-radius: 5px; cursor: pointer; font-size: 16px; }
-        #result { margin-top: 20px; display: none; padding: 20px; border-top: 2px solid #eee; }
-        .situacion-1 { color: green; font-weight: bold; }
-        .situacion-error { color: red; font-weight: bold; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; display: flex; justify-content: center; padding-top: 50px; }
+        .card { background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 500px; text-align: center; }
+        input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; font-size: 16px; }
+        button { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 16px; }
+        button:hover { background: #0056b3; }
+        #loader { display: none; margin-top: 20px; color: #666; }
+        #result { display: none; margin-top: 25px; text-align: left; border-top: 1px solid #eee; padding-top: 20px; }
+        .deuda-item { padding: 10px; border-bottom: 1px solid #fafafa; font-size: 14px; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+        .badge-1 { background: #d4edda; color: #155724; } /* Situación Normal */
+        .badge-error { background: #f8d7da; color: #721c24; } /* Situación Riesgo */
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>ScoreInqui 2025</h1>
-        <p>Ingresá el CUIT para analizar riesgo crediticio</p>
-        <input type="text" id="cuit" placeholder="20XXXXXXXX6" maxlength="11">
-        <br>
-        <button onclick="consultar()">Analizar Inquilino</button>
-        
-        <div id="loading" style="display:none;">🔎 Buscando en bases del BCRA...</div>
-        
-        <div id="result">
-            <h2 id="resNombre"></h2>
-            <div id="resDetalle"></div>
-        </div>
+
+<div class="card">
+    <h2>Consulta de Scoring</h2>
+    <p>Ingresá el CUIT del interesado</p>
+    <input type="text" id="cuitInput" placeholder="Ej: 20441138556" maxlength="11">
+    <button onclick="consultarBCRA()">Consultar ahora</button>
+
+    <div id="loader">⏳ Obteniendo datos oficiales...</div>
+
+    <div id="result">
+        <h3 id="nombrePersona"></h3>
+        <div id="listaDeudas"></div>
     </div>
+</div>
 
-    <script>
-        async function consultar() {
-            const cuit = document.getElementById('cuit').value;
-            const resDiv = document.getElementById('result');
-            const loadDiv = document.getElementById('loading');
-            
-            if(cuit.length !== 11) return alert("CUIT inválido");
+<script>
+    async function consultarBCRA() {
+        const cuit = document.getElementById('cuitInput').value;
+        const loader = document.getElementById('loader');
+        const resultDiv = document.getElementById('result');
+        const lista = document.getElementById('listaDeudas');
 
-            loadDiv.style.display = 'block';
-            resDiv.style.display = 'none';
+        if (cuit.length !== 11) return alert("Por favor, ingresá los 11 números del CUIT.");
 
-            try {
-                // CAMBIA ESTA URL cuando lo subas a Render/Vercel
-                const response = await fetch(`https://bcra-proxy-scoring.onrender.com/consulta?cuit=${cuit}`);
-                const data = await response.json();
+        loader.style.display = 'block';
+        resultDiv.style.display = 'none';
 
-                if (data.error) throw new Error(data.error);
+        try {
+            // URL DE TU PROXY EN RENDER
+            const url = `https://bcra-proxy-scoring.onrender.com/consulta?cuit=${cuit}`;
+            const response = await fetch(url);
+            const data = await response.json();
 
-                document.getElementById('resNombre').innerText = data.nombre;
-                let htmlDeudas = "<h3>Deudas Reportadas:</h3>";
-                
-                if (data.deudas.length === 0) {
-                    htmlDeudas += "<p class='situacion-1'>✅ Sin deudas negativas registradas.</p>";
-                } else {
-                    data.deudas.forEach(d => {
-                        htmlDeudas += `<p><b>${d.entidad}</b>: Situación ${d.situacion} (Monto: $${d.monto})</p>`;
-                    });
-                }
-                document.getElementById('resDetalle').innerHTML = htmlDeudas;
-                resDiv.style.display = 'block';
+            if (data.error) throw new Error(data.error);
 
-            } catch (err) {
-                alert("Error: " + err.message);
-            } finally {
-                loadDiv.style.display = 'none';
+            document.getElementById('nombrePersona').innerText = data.nombre;
+            lista.innerHTML = "";
+
+            if (data.deudas.length === 0) {
+                lista.innerHTML = "<p style='color:green'>✅ No registra deudas en el sistema financiero.</p>";
+            } else {
+                data.deudas.forEach(d => {
+                    const esRiesgo = parseInt(d.situacion) > 1;
+                    lista.innerHTML += `
+                        <div class="deuda-item">
+                            <b>${d.entidad}</b><br>
+                            Situación: <span class="badge ${esRiesgo ? 'badge-error' : 'badge-1'}">${d.situacion}</span> | 
+                            Monto: $${d.monto} (Período: ${d.periodo})
+                        </div>`;
+                });
             }
+
+            resultDiv.style.display = 'block';
+        } catch (err) {
+            alert("Error: " + err.message);
+        } finally {
+            loader.style.display = 'none';
         }
-    </script>
+    }
+</script>
+
 </body>
 </html>
