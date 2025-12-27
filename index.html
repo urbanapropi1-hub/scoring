@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -10,8 +11,7 @@
     body { font-family: 'Inter', sans-serif; background: #f8f9fa; margin: 0; padding: 0; color: #333; }
     .container { max-width: 800px; margin: 80px auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
     h1 { color: #1a73e8; text-align: center; margin-bottom: 10px; }
-    .header { text-align: center; margin-bottom: 30px; }
-    .person-info { font-size: 18px; font-weight: bold; color: #1a73e8; margin-bottom: 20px; }
+    p.subtitle { color: #666; text-align: center; margin-bottom: 30px; }
     form { display: flex; flex-direction: column; gap: 20px; text-align: left; }
     label { font-weight: 500; }
     input { padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
@@ -19,6 +19,8 @@
     button:hover { background: #0d5bd9; }
     button:disabled { background: #ccc; cursor: not-allowed; }
     #result { margin-top: 40px; display: none; }
+    .header { text-align: center; margin-bottom: 30px; }
+    .person-info { font-size: 18px; font-weight: bold; color: #1a73e8; margin-bottom: 20px; }
     .cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; margin-bottom: 30px; }
     .card { background: #f8f9fa; border-radius: 8px; padding: 20px; width: 220px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
     .card-title { font-size: 14px; color: #666; margin-bottom: 8px; }
@@ -29,10 +31,13 @@
     .score-text { position: absolute; top: 70%; left: 50%; transform: translate(-50%, -50%); font-size: 48px; font-weight: bold; }
     .error { color: red; text-align: center; }
     .info { font-size: 14px; color: #666; margin-top: 30px; text-align: center; }
-    .chart-container { margin-top: 40px; height: 300px; }
+    .detail-item { margin-bottom: 12px; text-align: left; }
     .loading { text-align: center; color: #1a73e8; margin: 20px 0; font-weight: bold; }
     .consent-label { font-size: 14px; color: #555; }
     .new-query { background: #28a745; margin-top: 20px; width: 100%; }
+    .chart-container { margin-top: 40px; height: 350px; text-align: center; }
+    .bank-logo { width: 120px; height: auto; margin-bottom: 10px; }
+    .bank-name { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
   </style>
 </head>
 <body>
@@ -56,15 +61,15 @@
 
     <div id="result">
       <div class="header">
-        <div class="person-info" id="personName">Consultando...</div>
+        <div class="person-info" id="personName">Consultado: CUIL <span id="cuilValue"></span></div>
         <div class="cards">
           <div class="card">
             <div class="card-title">Situación Último Mes</div>
             <div class="card-value" id="situacionMes">—</div>
           </div>
           <div class="card">
-            <div class="card-title">Saldo Vigente</div>
-            <div class="card-value" id="saldoVigente">—</div>
+            <div class="card-title">Deuda Total Vigente</div>
+            <div class="card-value" id="deudaTotal">—</div>
           </div>
           <div class="card">
             <div class="card-title">Cheques Rechazados</div>
@@ -80,9 +85,14 @@
       </div>
       <div id="category"></div>
       <div id="details"></div>
+
+      <!-- Gráfico de deudas por entidad -->
       <div class="chart-container">
+        <div id="bankLogoContainer" class="bank-logo"></div>
+        <div class="bank-name" id="bankName">Entidad Bancaria</div>
         <canvas id="deudasChart"></canvas>
       </div>
+
       <button class="new-query" onclick="resetForm()">Nueva consulta</button>
     </div>
 
@@ -105,18 +115,29 @@
       if (deudasChart) deudasChart.destroy();
     }
 
+    // Logos de bancos comunes (puedes agregar más)
+    const bankLogos = {
+      'Banco de la Nación Argentina': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Banco_Naci%C3%B3n_logo.svg/512px-Banco_Naci%C3%B3n_logo.svg.png',
+      'Banco Galicia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Banco_Galicia_logo.svg/512px-Banco_Galicia_logo.svg.png',
+      'BBVA': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/BBVA_logo.svg/512px-BBVA_logo.svg.png',
+      'Santander': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Banco_Santander_logo.svg/512px-Banco_Santander_logo.svg.png',
+      'Banco Macro': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/Banco_Macro_logo.svg/512px-Banco_Macro_logo.svg.png'
+      // Agrega más si querés
+    };
+
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const cuil = document.getElementById('cuil').value.trim().replace(/-/g, '');
+      document.getElementById('cuilValue').textContent = cuil;
+
       const loading = document.getElementById('loading');
       const resultDiv = document.getElementById('result');
       const scoreValue = document.getElementById('scoreValue');
       const categoryDiv = document.getElementById('category');
       const details = document.getElementById('details');
-      const personName = document.getElementById('personName');
       const situacionMes = document.getElementById('situacionMes');
-      const saldoVigente = document.getElementById('saldoVigente');
+      const deudaTotal = document.getElementById('deudaTotal');
       const chequesRechazados = document.getElementById('chequesRechazados');
 
       loading.style.display = 'block';
@@ -126,20 +147,17 @@
         const proxy = '/api/proxy?url=';
         const baseUrl = '/centraldedeudores/v1.0/';
 
-        // 1. Deudas actuales (para situación y saldo)
         let deudasActuales = { deudas: [] };
         const resDeudas = await fetch(proxy + baseUrl + 'Deudas/' + cuil);
         if (resDeudas.ok) deudasActuales = await resDeudas.json();
 
-        // 2. Cheques rechazados
-        let cheques = [];
-        const resCheques = await fetch(proxy + baseUrl + 'Deudas/ChequesRechazados/' + cuil);
-        if (resCheques.ok) cheques = (await resCheques.json()).cheques || [];
-
-        // 3. Deudas históricas para gráfico
         let historicas = [];
         const resHistoricas = await fetch(proxy + baseUrl + 'Deudas/Historicas/' + cuil);
         if (resHistoricas.ok) historicas = (await resHistoricas.json()).deudas || [];
+
+        let cheques = [];
+        const resCheques = await fetch(proxy + baseUrl + 'Deudas/ChequesRechazados/' + cuil);
+        if (resCheques.ok) cheques = (await resCheques.json()).cheques || [];
 
         // Lógica de scoring
         let score = 950;
@@ -152,7 +170,10 @@
             mensajes.push(`Riesgo medio: ${deudasActuales.deudas.length} deuda(s) con atrasos`);
           }
           const totalDeuda = deudasActuales.deudas.reduce((sum, d) => sum + (d.monto || 0), 0);
+          deudaTotal.textContent = `${totalDeuda.toLocaleString()} ARS`;
           mensajes.push(`Deuda total actual: ${totalDeuda.toLocaleString()} pesos`);
+        } else {
+          deudaTotal.textContent = 'ARS 0';
         }
 
         if (historicas.length > 0) {
@@ -166,7 +187,13 @@
         if (cheques.length > 0) {
           score -= 200;
           mensajes.push(`Alto riesgo: ${cheques.length} cheque(s) rechazado(s)`);
+        } else {
+          chequesRechazados.textContent = 'Ninguno';
         }
+
+        situacionMes.innerHTML = deudasActuales.deudas?.length > 0 && deudasActuales.deudas.some(d => d.diasAtraso > 0) 
+          ? '<span class="risk">En situación irregular</span>' 
+          : '<span class="normal">En situación normal</span>';
 
         score = Math.max(0, Math.min(1000, score));
 
@@ -174,17 +201,7 @@
                           score >= 701 ? 'Bajo riesgo' :
                           score >= 501 ? 'Riesgo medio' : 'Alto riesgo';
 
-        // Mostrar tarjetas como Tirr
-        personName.textContent = `Consultado: CUIL ${cuil}`; // Placeholder (puedes agregar API para nombre real)
-        situacionMes.innerHTML = deudasActuales.deudas?.length > 0 && deudasActuales.deudas.some(d => d.diasAtraso > 0) 
-          ? '<span class="risk">En situación irregular</span>' 
-          : '<span class="normal">En situación normal</span>';
-        saldoVigente.textContent = deudasActuales.deudas?.length > 0 
-          ? `${deudasActuales.deudas.reduce((sum, d) => sum + (d.monto || 0), 0).toLocaleString()} ARS` 
-          : 'ARS 0';
-        chequesRechazados.textContent = cheques.length > 0 ? `${cheques.length} rechazos` : 'Ninguno';
-
-        // Gauge circular
+        // Gauge
         const gaugeCtx = document.getElementById('gaugeChart').getContext('2d');
         if (gaugeChart) gaugeChart.destroy();
         gaugeChart = new Chart(gaugeCtx, {
@@ -210,19 +227,27 @@
           ? mensajes.map(m => `<div class="detail-item">${m}</div>`).join('')
           : '<div class="detail-item">Sin incidencias registradas</div>';
 
-        // Gráfico de deudas históricas
+        // Gráfico de deudas por entidad (simulado con datos de historicas)
         const deudasCtx = document.getElementById('deudasChart').getContext('2d');
         if (deudasChart) deudasChart.destroy();
 
         const labels = historicas.map(h => h.fecha || 'Mes');
         const valores = historicas.map(h => h.monto || 0);
 
+        // Simulamos entidad (en producción, BCRA devuelve entidad en algunos casos)
+        const entidad = 'Banco de la Nación Argentina'; // Ejemplo; puedes hacer dinámico
+        document.getElementById('bankName').textContent = entidad;
+
+        // Logo del banco
+        const logoUrl = bankLogos[entidad] || 'https://via.placeholder.com/120?text=Banco';
+        document.getElementById('bankLogoContainer').innerHTML = `<img src="${logoUrl}" alt="${entidad}" class="bank-logo">`;
+
         deudasChart = new Chart(deudasCtx, {
           type: 'line',
           data: {
             labels: labels,
             datasets: [{
-              label: 'Deuda histórica',
+              label: `Deuda en ${entidad}`,
               data: valores,
               borderColor: '#1a73e8',
               backgroundColor: 'rgba(26, 115, 232, 0.2)',
@@ -250,11 +275,20 @@
       }
     });
 
+    // Logos de bancos (puedes agregar más)
+    const bankLogos = {
+      'Banco de la Nación Argentina': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Banco_Naci%C3%B3n_logo.svg/512px-Banco_Naci%C3%B3n_logo.svg.png',
+      'Banco Galicia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Banco_Galicia_logo.svg/512px-Banco_Galicia_logo.svg.png',
+      'BBVA': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/BBVA_logo.svg/512px-BBVA_logo.svg.png',
+      'Santander': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Banco_Santander_logo.svg/512px-Banco_Santander_logo.svg.png',
+      'Banco Macro': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/Banco_Macro_logo.svg/512px-Banco_Macro_logo.svg.png'
+    };
+
     function getGaugeColor(score) {
-      if (score >= 851) return '#28a745'; // Verde
-      if (score >= 701) return '#ffc107'; // Amarillo
-      if (score >= 501) return '#fd7e14'; // Naranja
-      return '#dc3545'; // Rojo
+      if (score >= 851) return '#28a745';
+      if (score >= 701) return '#ffc107';
+      if (score >= 501) return '#fd7e14';
+      return '#dc3545';
     }
   </script>
 </body>
