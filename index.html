@@ -86,8 +86,8 @@
       details.innerHTML = '';
 
       try {
-        const proxy = 'https://cors-anywhere.herokuapp.com/';
-        const baseUrl = 'https://api.bcra.gob.ar/centraldedeudores/v1.0/';
+        const proxy = '/api/proxy?url=';
+        const baseUrl = '/centraldedeudores/v1.0/';
 
         let deudasActuales = { deudas: [] };
         const resDeudas = await fetch(proxy + baseUrl + 'Deudas/' + cuil);
@@ -132,7 +132,6 @@
 
         score = Math.max(0, Math.min(1000, score));
 
-        // Categoría de riesgo
         const categoria = score >= 851 ? 'Muy bajo riesgo' :
                           score >= 701 ? 'Bajo riesgo' :
                           score >= 501 ? 'Riesgo medio' : 'Alto riesgo';
