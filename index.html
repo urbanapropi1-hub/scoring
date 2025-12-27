@@ -16,7 +16,6 @@
     input { padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
     button { background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 6px; font-size: 16px; cursor: pointer; }
     button:hover { background: #0d5bd9; }
-    button:disabled { background: #ccc; cursor: not-allowed; }
     #result { margin-top: 40px; display: none; }
     .header { text-align: center; margin-bottom: 30px; }
     .person-info { font-size: 18px; font-weight: bold; color: #1a73e8; margin-bottom: 20px; }
@@ -32,7 +31,6 @@
     .info { font-size: 14px; color: #666; margin-top: 30px; text-align: center; }
     .detail-item { margin-bottom: 12px; text-align: left; }
     .loading { text-align: center; color: #1a73e8; margin: 20px 0; font-weight: bold; }
-    .consent-label { font-size: 14px; color: #555; }
     .new-query { background: #28a745; margin-top: 20px; width: 100%; }
     .chart-container { margin-top: 40px; height: 400px; text-align: center; position: relative; }
     .bank-logo { width: 120px; height: auto; margin-bottom: 10px; }
@@ -48,13 +46,7 @@
     <form id="form">
       <label for="cuil">DNI o CUIL del inquilino</label>
       <input type="text" id="cuil" placeholder="Ej: 20123456789" required pattern="\d{7,11}">
-      
-      <label class="consent-label">
-        <input type="checkbox" id="consent" required>
-        Autorizo la consulta de datos públicos del BCRA y entiendo que no incluye datos privados ni bancarios.
-      </label>
-      
-      <button type="submit" id="btnConsultar" disabled>Consultar</button>
+      <button type="submit">Consultar</button> <!-- Siempre disponible -->
     </form>
 
     <div id="loading" class="loading" style="display:none;">Consultando BCRA... Por favor espera.</div>
@@ -117,15 +109,9 @@
       'Banco Supervielle': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Banco_Supervielle_logo.svg/512px-Banco_Supervielle_logo.svg.png'
     };
 
-    document.getElementById('consent').addEventListener('change', (e) => {
-      document.getElementById('btnConsultar').disabled = !e.target.checked;
-    });
-
     function resetForm() {
       document.getElementById('form').reset();
       document.getElementById('result').style.display = 'none';
-      document.getElementById('btnConsultar').disabled = true;
-      document.getElementById('consent').checked = false;
       if (gaugeChart) gaugeChart.destroy();
       if (deudasChart) deudasChart.destroy();
       document.getElementById('noDataMessage').style.display = 'none';
@@ -232,19 +218,19 @@
           ? mensajes.map(m => `<div class="detail-item">${m}</div>`).join('')
           : '<div class="detail-item">Sin incidencias registradas</div>';
 
-        // Gráfico de deudas por entidad (múltiples líneas)
+        // Gráfico de deudas por entidad
         const deudasCtx = document.getElementById('deudasChart').getContext('2d');
         if (deudasChart) deudasChart.destroy();
 
         const labels = historicas.map(h => h.fecha || 'Mes');
 
-        // Simulamos entidades y datos (en producción, extrae de deudasActuales.deudas)
+        // Simulamos entidades (en producción, extrae de deudasActuales.deudas)
         const entidades = historicas.length > 0 ? ['Banco Nación', 'Banco Galicia', 'BBVA'] : [];
         const colors = ['#1a73e8', '#ff6b6b', '#4ecdc4'];
 
         const datasets = entidades.map((entidad, index) => ({
           label: entidad,
-          data: labels.map((_, i) => historicas[i]?.monto * (0.8 + index * 0.1) || 0), // Simulación
+          data: labels.map((_, i) => historicas[i]?.monto * (0.8 + index * 0.1) || 0),
           borderColor: colors[index],
           backgroundColor: colors[index] + '33',
           tension: 0.4,
@@ -252,7 +238,6 @@
         }));
 
         if (entidades.length > 0) {
-          // Logo de la primera entidad
           const entidadPrincipal = entidades[0];
           document.getElementById('bankName').textContent = entidadPrincipal;
           const logoUrl = bankLogos[entidadPrincipal] || 'https://via.placeholder.com/120?text=Banco';
