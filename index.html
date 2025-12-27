@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ScoreInqui - Scoring BCRA</title>
+  <title>ScoreInqui - Scoring BCRA + AFIP</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -62,6 +62,7 @@
         <p><strong>Dirección:</strong> <span id="afipDireccion">—</span></p>
         <p><strong>Localidad/Provincia:</strong> <span id="afipLocalidad">—</span></p>
         <p><strong>CUIT/CUIL:</strong> <span id="afipCuit">—</span></p>
+        <p id="afipError" style="color: red; display: none;"></p>
       </div>
 
       <div class="header">
@@ -123,13 +124,13 @@
       if (gaugeChart) gaugeChart.destroy();
       if (deudasChart) deudasChart.destroy();
       document.getElementById('noDataMessage').style.display = 'none';
-      // Resetear datos AFIP
       document.getElementById('afipNombre').textContent = '—';
       document.getElementById('afipTipo').textContent = '—';
       document.getElementById('afipEstado').textContent = '—';
       document.getElementById('afipDireccion').textContent = '—';
       document.getElementById('afipLocalidad').textContent = '—';
       document.getElementById('afipCuit').textContent = '—';
+      document.getElementById('afipError').style.display = 'none';
     }
 
     // Función para consultar AFIP
@@ -153,7 +154,7 @@
         }
 
         if (!cuitPrincipal) {
-          return { error: 'No se encontró CUIT/CUIL asociado' };
+          throw new Error('No se encontró CUIT/CUIL asociado');
         }
 
         // Consultar datos completos
@@ -172,7 +173,7 @@
             cuit: data.cuit || cuitPrincipal
           };
         } else {
-          return { error: 'No se encontraron datos en AFIP' };
+          throw new Error('No se encontraron datos en AFIP');
         }
       } catch (err) {
         return { error: err.message };
@@ -198,7 +199,7 @@
       resultDiv.style.display = 'none';
 
       try {
-        // 1. Consultar datos AFIP
+        // 1. Consultar AFIP
         const afipData = await consultarAFIP(cuil);
         if (!afipData.error) {
           document.getElementById('afipNombre').textContent = afipData.nombre;
@@ -207,6 +208,7 @@
           document.getElementById('afipDireccion').textContent = afipData.direccion;
           document.getElementById('afipLocalidad').textContent = `${afipData.localidad}, ${afipData.provincia}`;
           document.getElementById('afipCuit').textContent = afipData.cuit;
+          document.getElementById('afipError').style.display = 'none';
         } else {
           document.getElementById('afipNombre').textContent = 'No disponible';
           document.getElementById('afipTipo').textContent = '—';
@@ -214,9 +216,11 @@
           document.getElementById('afipDireccion').textContent = '—';
           document.getElementById('afipLocalidad').textContent = '—';
           document.getElementById('afipCuit').textContent = '—';
+          document.getElementById('afipError').textContent = afipData.error;
+          document.getElementById('afipError').style.display = 'block';
         }
 
-        // 2. Consultar BCRA (como antes)
+        // 2. Consultar BCRA
         const proxy = 'https://bcra-proxy-scoring.onrender.com/proxy?url=';
         const baseUrl = '/centraldedeudores/v1.0/';
 
