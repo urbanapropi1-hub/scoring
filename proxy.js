@@ -8,11 +8,9 @@ export default async function handler(req, res) {
 
   try {
     const fullUrl = `https://api.bcra.gob.ar${url.startsWith('/') ? url : '/' + url}`;
-    const response = await fetch(fullUrl, {
-      method: req.method || 'GET',
-    });
-
+    const response = await fetch(fullUrl);
     const data = await response.json();
+
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json(data);
   } catch (err) {
