@@ -46,8 +46,8 @@
     <p class="subtitle">Scoring gratuito con datos públicos del BCRA y AFIP</p>
 
     <form id="form">
-      <label for="cuil">DNI o CUIL del inquilino</label>
-      <input type="text" id="cuil" placeholder="Ej: 20123456789 o 20-12345678-9" required pattern="\d{7,11}">
+      <label for="cuil">CUIT o DNI del inquilino</label>
+      <input type="text" id="cuil" placeholder="Ej: 20441138556 o 204411385" required pattern="\d{7,11}">
       <button type="submit">Consultar</button>
     </form>
 
@@ -61,12 +61,12 @@
         <p><strong>Estado:</strong> <span id="afipEstado">—</span></p>
         <p><strong>Dirección:</strong> <span id="afipDireccion">—</span></p>
         <p><strong>Localidad/Provincia:</strong> <span id="afipLocalidad">—</span></p>
-        <p><strong>CUIT/CUIL:</strong> <span id="afipCuit">—</span></p>
+        <p><strong>CUIT:</strong> <span id="afipCuit">—</span></p>
         <p id="afipMessage" style="color: #666; font-style: italic; margin-top: 10px;">Fuente: Padrón de AFIP</p>
       </div>
 
       <div class="header">
-        <div class="person-info" id="personName">Consultado: CUIL <span id="cuilValue"></span></div>
+        <div class="person-info" id="personName">Consultado: CUIT <span id="cuilValue"></span></div>
         <div class="cards">
           <div class="card">
             <div class="card-title">Situación Último Mes</div>
@@ -134,40 +134,23 @@
       document.getElementById('afipMessage').style.color = '#666';
     }
 
-    // Función mejorada para consultar AFIP (usa la API que trae datos para tu CUIL)
-    async function consultarAFIP(cuilInput) {
+    // Función para consultar AFIP (usa la API que trae datos para tu CUIT)
+    async function consultarAFIP(cuitInput) {
       try {
-        const cuil = cuilInput.replace(/-/g, '').trim();
-
-        let cuitPrincipal = cuil;
-
-        // Si es DNI (7-8 dígitos), buscar CUIL asociado
-        if (cuil.length <= 8) {
-          const resPersonas = await fetch(`https://soa.afip.gob.ar/sr-padron/v2/personas/${cuil}`);
-          if (resPersonas.ok) {
-            const dataPersonas = await resPersonas.json();
-            if (dataPersonas.length > 0) {
-              cuitPrincipal = dataPersonas[0];
-            }
-          }
-        }
+        const cuit = cuitInput.replace(/-/g, '').trim();
 
         // Consultar datos completos
-        const resPersona = await fetch(`https://soa.afip.gob.ar/sr-padron/v2/persona/${cuitPrincipal}`);
+        const resPersona = await fetch(`https://api.argentina.gob.ar/v1/padron/${cuit}`);
         if (resPersona.ok) {
           const data = await resPersona.json();
-          if (!data.denominacion) {
-            throw new Error('No se encontraron datos públicos');
-          }
           return {
-            nombre: data.denominacion || 'No disponible',
-            tipo: data.tipoPersona === 'FISICA' ? 'Persona Física' : 'Persona Jurídica',
-            estado: data.estado || 'No disponible',
-            direccion: data.domicilios?.[0]?.direccion || 'No disponible',
-            localidad: data.domicilios?.[0]?.localidad || 'No disponible',
-            provincia: data.domicilios?.[0]?.provincia || 'No disponible',
-            cp: data.domicilios?.[0]?.codPostal || 'No disponible',
-            cuit: data.cuit || cuitPrincipal
+            nombre: data.nombre || 'No disponible',
+            tipo: data.tipoPersona || 'Persona Física',
+            estado: data.estado || 'ACTIVO',
+            direccion: data.direccion || 'No disponible',
+            localidad: data.localidad || 'No disponible',
+            provincia: data.provincia || 'No disponible',
+            cuit: data.cuit || cuit
           };
         } else {
           throw new Error('No se encontraron datos en AFIP');
@@ -180,8 +163,8 @@
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const cuil = document.getElementById('cuil').value.trim().replace(/-/g, '');
-      document.getElementById('cuilValue').textContent = cuil;
+      const cuit = document.getElementById('cuil').value.trim().replace(/-/g, '');
+      document.getElementById('cuilValue').textContent = cuit;
 
       const loading = document.getElementById('loading');
       const resultDiv = document.getElementById('result');
@@ -197,7 +180,7 @@
 
       try {
         // 1. Consultar AFIP
-        const afipData = await consultarAFIP(cuil);
+        const afipData = await consultarAFIP(cuit);
         if (!afipData.error) {
           document.getElementById('afipNombre').textContent = afipData.nombre;
           document.getElementById('afipTipo').textContent = afipData.tipo;
@@ -214,24 +197,24 @@
           document.getElementById('afipDireccion').textContent = '—';
           document.getElementById('afipLocalidad').textContent = '—';
           document.getElementById('afipCuit').textContent = '—';
-          document.getElementById('afipMessage').textContent = 'No se encontraron datos públicos en AFIP para este CUIL/DNI.';
+          document.getElementById('afipMessage').textContent = 'No se encontraron datos públicos en AFIP para este CUIT.';
           document.getElementById('afipMessage').style.color = '#dc3545';
         }
 
-        // 2. Consultar BCRA (como antes)
+        // 2. Consultar BCRA
         const proxy = 'https://bcra-proxy-scoring.onrender.com/proxy?url=';
         const baseUrl = '/centraldedeudores/v1.0/';
 
         let deudasActuales = { deudas: [] };
-        const resDeudas = await fetch(proxy + baseUrl + 'Deudas/' + cuil);
+        const resDeudas = await fetch(proxy + baseUrl + 'Deudas/' + cuit);
         if (resDeudas.ok) deudasActuales = await resDeudas.json();
 
         let historicas = [];
-        const resHistoricas = await fetch(proxy + baseUrl + 'Deudas/Historicas/' + cuil);
+        const resHistoricas = await fetch(proxy + baseUrl + 'Deudas/Historicas/' + cuit);
         if (resHistoricas.ok) historicas = (await resHistoricas.json()).deudas || [];
 
         let cheques = [];
-        const resCheques = await fetch(proxy + baseUrl + 'Deudas/ChequesRechazados/' + cuil);
+        const resCheques = await fetch(proxy + baseUrl + 'Deudas/ChequesRechazados/' + cuit);
         if (resCheques.ok) cheques = (await resCheques.json()).cheques || [];
 
         let score = 950;
