@@ -131,7 +131,7 @@
       resultDiv.style.display = 'none';
 
       try {
-        const proxy = '/api/proxy?url=';
+        const proxy = 'https://bcra-proxy-scoring.onrender.com/proxy?url=';
         const baseUrl = '/centraldedeudores/v1.0/';
 
         let deudasActuales = { deudas: [] };
@@ -266,17 +266,6 @@
         loading.style.display = 'none';
       }
     });
-
-    const bankLogos = {
-      'Banco de la Nación Argentina': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Banco_Naci%C3%B3n_logo.svg/512px-Banco_Naci%C3%B3n_logo.svg.png',
-      'Banco Galicia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Banco_Galicia_logo.svg/512px-Banco_Galicia_logo.svg.png',
-      'BBVA': 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/BBVA_logo.svg/512px-BBVA_logo.svg.png',
-      'Banco Santander Río': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Banco_Santander_logo.svg/512px-Banco_Santander_logo.svg.png',
-      'Banco Macro': 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/Banco_Macro_logo.svg/512px-Banco_Macro_logo.svg.png',
-      'Banco Provincia': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Banco_Provincia_logo.svg/512px-Banco_Provincia_logo.svg.png',
-      'Banco Ciudad': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Banco_Ciudad_logo.svg/512px-Banco_Ciudad_logo.svg.png',
-      'HSBC': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/HSBC_logo.svg/512px-HSBC_logo.svg.png'
-    };
 
     function getGaugeColor(score) {
       if (score >= 851) return '#28a745';
