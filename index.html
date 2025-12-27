@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ScoreInqui - Scoring BCRA + AFIP</title>
+  <title>ScoreInqui - Scoring BCRA</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -35,36 +35,22 @@
     .bank-logo { width: 120px; height: auto; margin-bottom: 10px; }
     .bank-name { font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #1a73e8; }
     .no-data { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #666; font-size: 16px; }
-    .afip-info { width: 40%; padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px; float: left; }
-    .afip-info h3 { margin-top: 0; }
-    .afip-info p { margin: 8px 0; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>ScoreInqui</h1>
-    <p class="subtitle">Scoring gratuito con datos públicos del BCRA y AFIP</p>
+    <p class="subtitle">Scoring gratuito con datos públicos del BCRA</p>
 
     <form id="form">
-      <label for="cuil">CUIT o DNI del inquilino</label>
-      <input type="text" id="cuil" placeholder="Ej: 20441138556 o 204411385" required pattern="\d{7,11}">
+      <label for="cuil">CUIT del inquilino</label>
+      <input type="text" id="cuil" placeholder="Ej: 20441138556" required pattern="\d{11}">
       <button type="submit">Consultar</button>
     </form>
 
-    <div id="loading" class="loading" style="display:none;">Consultando BCRA y AFIP... Por favor espera.</div>
+    <div id="loading" class="loading" style="display:none;">Consultando BCRA... Por favor espera.</div>
 
     <div id="result">
-      <div class="afip-info">
-        <h3>Datos Generales (AFIP)</h3>
-        <p><strong>Nombre:</strong> <span id="afipNombre">—</span></p>
-        <p><strong>Tipo:</strong> <span id="afipTipo">—</span></p>
-        <p><strong>Estado:</strong> <span id="afipEstado">—</span></p>
-        <p><strong>Dirección:</strong> <span id="afipDireccion">—</span></p>
-        <p><strong>Localidad/Provincia:</strong> <span id="afipLocalidad">—</span></p>
-        <p><strong>CUIT:</strong> <span id="afipCuit">—</span></p>
-        <p id="afipMessage" style="color: #666; font-style: italic; margin-top: 10px;">Fuente: Padrón de AFIP</p>
-      </div>
-
       <div class="header">
         <div class="person-info" id="personName">Consultado: CUIT <span id="cuilValue"></span></div>
         <div class="cards">
@@ -101,7 +87,7 @@
       <button class="new-query" onclick="resetForm()">Nueva consulta</button>
     </div>
 
-    <p class="info">Datos públicos de Central de Deudores del BCRA y Padrón AFIP. Próximamente: Prometeo para datos bancarios (con consentimiento).</p>
+    <p class="info">Datos públicos de Central de Deudores del BCRA. Próximamente: Prometeo para datos bancarios (con consentimiento).</p>
   </div>
 
   <script>
@@ -124,40 +110,6 @@
       if (gaugeChart) gaugeChart.destroy();
       if (deudasChart) deudasChart.destroy();
       document.getElementById('noDataMessage').style.display = 'none';
-      document.getElementById('afipNombre').textContent = '—';
-      document.getElementById('afipTipo').textContent = '—';
-      document.getElementById('afipEstado').textContent = '—';
-      document.getElementById('afipDireccion').textContent = '—';
-      document.getElementById('afipLocalidad').textContent = '—';
-      document.getElementById('afipCuit').textContent = '—';
-      document.getElementById('afipMessage').textContent = 'Fuente: Padrón de AFIP';
-      document.getElementById('afipMessage').style.color = '#666';
-    }
-
-    // Función para consultar AFIP (usa la API que trae datos para tu CUIT)
-    async function consultarAFIP(cuitInput) {
-      try {
-        const cuit = cuitInput.replace(/-/g, '').trim();
-
-        // Consultar datos completos
-        const resPersona = await fetch(`https://api.argentina.gob.ar/v1/padron/${cuit}`);
-        if (resPersona.ok) {
-          const data = await resPersona.json();
-          return {
-            nombre: data.nombre || 'No disponible',
-            tipo: data.tipoPersona || 'Persona Física',
-            estado: data.estado || 'ACTIVO',
-            direccion: data.direccion || 'No disponible',
-            localidad: data.localidad || 'No disponible',
-            provincia: data.provincia || 'No disponible',
-            cuit: data.cuit || cuit
-          };
-        } else {
-          throw new Error('No se encontraron datos en AFIP');
-        }
-      } catch (err) {
-        return { error: err.message };
-      }
     }
 
     document.getElementById('form').addEventListener('submit', async (e) => {
@@ -179,76 +131,39 @@
       resultDiv.style.display = 'none';
 
       try {
-        // 1. Consultar AFIP
-        const afipData = await consultarAFIP(cuit);
-        if (!afipData.error) {
-          document.getElementById('afipNombre').textContent = afipData.nombre;
-          document.getElementById('afipTipo').textContent = afipData.tipo;
-          document.getElementById('afipEstado').textContent = afipData.estado;
-          document.getElementById('afipDireccion').textContent = afipData.direccion;
-          document.getElementById('afipLocalidad').textContent = `${afipData.localidad}, ${afipData.provincia}`;
-          document.getElementById('afipCuit').textContent = afipData.cuit;
-          document.getElementById('afipMessage').textContent = 'Fuente: Padrón de AFIP';
-          document.getElementById('afipMessage').style.color = '#666';
-        } else {
-          document.getElementById('afipNombre').textContent = 'No disponible';
-          document.getElementById('afipTipo').textContent = '—';
-          document.getElementById('afipEstado').textContent = '—';
-          document.getElementById('afipDireccion').textContent = '—';
-          document.getElementById('afipLocalidad').textContent = '—';
-          document.getElementById('afipCuit').textContent = '—';
-          document.getElementById('afipMessage').textContent = 'No se encontraron datos públicos en AFIP para este CUIT.';
-          document.getElementById('afipMessage').style.color = '#dc3545';
-        }
+        // Fetch al proxy en Render (scrapea la web del BCRA)
+        const proxy = 'https://bcra-proxy-scoring.onrender.com/proxy?cuit=';
+        const res = await fetch(proxy + cuit);
+        if (!res.ok) throw new Error('Error al consultar BCRA');
 
-        // 2. Consultar BCRA
-        const proxy = 'https://bcra-proxy-scoring.onrender.com/proxy?url=';
-        const baseUrl = '/centraldedeudores/v1.0/';
+        const data = await res.json();
 
-        let deudasActuales = { deudas: [] };
-        const resDeudas = await fetch(proxy + baseUrl + 'Deudas/' + cuit);
-        if (resDeudas.ok) deudasActuales = await resDeudas.json();
-
-        let historicas = [];
-        const resHistoricas = await fetch(proxy + baseUrl + 'Deudas/Historicas/' + cuit);
-        if (resHistoricas.ok) historicas = (await resHistoricas.json()).deudas || [];
-
-        let cheques = [];
-        const resCheques = await fetch(proxy + baseUrl + 'Deudas/ChequesRechazados/' + cuit);
-        if (resCheques.ok) cheques = (await resCheques.json()).cheques || [];
+        // Mostrar nombre
+        document.getElementById('personName').textContent = `Consultado: ${data.nombre || 'CUIT ' + cuit}`;
 
         let score = 950;
         let mensajes = [];
 
-        if (deudasActuales.deudas?.length > 0) {
-          const tieneAtraso = deudasActuales.deudas.some(d => d.diasAtraso > 0);
+        if (data.deudas?.length > 0) {
+          const tieneAtraso = data.deudas.some(d => d.atraso > 0 || d.situacion !== '1');
           if (tieneAtraso) {
             score -= 200;
-            mensajes.push(`Riesgo medio: ${deudasActuales.deudas.length} deuda(s) con atrasos`);
+            mensajes.push(`Riesgo medio: ${data.deudas.length} deuda(s)`);
           }
-          const totalDeuda = deudasActuales.deudas.reduce((sum, d) => sum + (d.monto || 0), 0);
+
+          const totalDeuda = data.deudas.reduce((sum, d) => sum + (parseInt(d.monto.replace(/\D/g, '')) || 0), 0);
           deudaTotal.textContent = `${(totalDeuda / 1000).toFixed(0)} mil ARS`;
-          mensajes.push(`Deuda total actual: ${totalDeuda.toLocaleString()} pesos`);
+          mensajes.push(`Deuda total: ${totalDeuda.toLocaleString()} pesos`);
+
+          // Mostrar entidades
+          data.deudas.forEach(d => {
+            mensajes.push(`Deuda en ${d.entidad}: ${d.monto} ARS (${d.periodo}) - Situación: ${d.situacion}`);
+          });
         } else {
           deudaTotal.textContent = 'ARS 0';
         }
 
-        if (historicas.length > 0) {
-          const historicoAtrasos = historicas.filter(h => h.diasAtraso > 0).length;
-          if (historicoAtrasos > 0) {
-            score -= 150;
-            mensajes.push(`Riesgo adicional: ${historicoAtrasos} meses con atrasos en últimos 24`);
-          }
-        }
-
-        if (cheques.length > 0) {
-          score -= 200;
-          mensajes.push(`Alto riesgo: ${cheques.length} cheque(s) rechazado(s)`);
-        } else {
-          chequesRechazados.textContent = 'Ninguno';
-        }
-
-        situacionMes.innerHTML = deudasActuales.deudas?.length > 0 && deudasActuales.deudas.some(d => d.diasAtraso > 0) 
+        situacionMes.innerHTML = mensajes.some(m => m.includes('riesgo')) 
           ? '<span class="risk">En situación irregular</span>' 
           : '<span class="normal">En situación normal</span>';
 
@@ -283,56 +198,11 @@
           ? mensajes.map(m => `<div class="detail-item">${m}</div>`).join('')
           : '<div class="detail-item">Sin incidencias registradas</div>';
 
-        const deudasCtx = document.getElementById('deudasChart').getContext('2d');
-        if (deudasChart) deudasChart.destroy();
-
-        const labels = historicas.map(h => h.fecha || 'Mes');
-
-        const entidades = historicas.length > 0 ? ['Banco Nación', 'Banco Galicia', 'BBVA'] : [];
-        const colors = ['#1a73e8', '#ff6b6b', '#4ecdc4'];
-
-        const datasets = entidades.map((entidad, index) => ({
-          label: entidad,
-          data: labels.map((_, i) => historicas[i]?.monto * (0.8 + index * 0.1) || 0),
-          borderColor: colors[index],
-          backgroundColor: colors[index] + '33',
-          tension: 0.4,
-          fill: false
-        }));
-
-        if (entidades.length > 0) {
-          const entidadPrincipal = entidades[0];
-          document.getElementById('bankName').textContent = entidadPrincipal;
-          const logoUrl = bankLogos[entidadPrincipal] || 'https://via.placeholder.com/120?text=Banco';
-          document.getElementById('bankLogoContainer').innerHTML = `<img src="${logoUrl}" alt="${entidadPrincipal}" class="bank-logo">`;
-
-          deudasChart = new Chart(deudasCtx, {
-            type: 'line',
-            data: {
-              labels: labels,
-              datasets: datasets
-            },
-            options: {
-              responsive: true,
-              scales: {
-                y: { beginAtZero: true, title: { display: true, text: 'Monto (ARS)' } },
-                x: { title: { display: true, text: 'Fecha' } }
-              },
-              plugins: { legend: { display: true, position: 'top' } }
-            }
-          });
-          document.getElementById('noDataMessage').style.display = 'none';
-        } else {
-          document.getElementById('noDataMessage').style.display = 'block';
-          document.getElementById('bankName').textContent = 'Sin entidades registradas';
-          document.getElementById('bankLogoContainer').innerHTML = '';
-        }
-
         resultDiv.style.display = 'block';
 
       } catch (err) {
         scoreValue.textContent = 'Error';
-        details.innerHTML = `<span class="error">Error al conectar con BCRA/AFIP: ${err.message}</span>`;
+        details.innerHTML = `<span class="error">Error al conectar con BCRA: ${err.message}</span>`;
       } finally {
         loading.style.display = 'none';
       }
