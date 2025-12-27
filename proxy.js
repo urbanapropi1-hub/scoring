@@ -2,27 +2,18 @@
 export default async function handler(req, res) {
   const { url } = req.query;
 
-  // Validación básica para evitar abusos
-  if (!url || !url.startsWith('/centraldedeudores')) {
-    return res.status(400).json({ error: 'URL inválida' });
+  if (!url) {
+    return res.status(400).json({ error: 'URL requerida' });
   }
 
   try {
-    const fullUrl = `https://api.bcra.gob.ar${url}`;
+    const fullUrl = `https://api.bcra.gob.ar${url.startsWith('/') ? url : '/' + url}`;
     const response = await fetch(fullUrl, {
       method: req.method || 'GET',
-      headers: {
-        'User-Agent': 'ScoreInqui/1.0 (vercel.app)'
-      }
     });
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: 'Error en BCRA', status: response.status });
-    }
 
     const data = await response.json();
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
