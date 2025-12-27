@@ -5,29 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>ScoreInqui - Scoring BCRA</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <!-- Chart.js CDN para gauge y gráfico -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: 'Inter', sans-serif; background: #f8f9fa; margin: 0; padding: 0; color: #333; }
-    .container { max-width: 700px; margin: 80px auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+    .container { max-width: 800px; margin: 80px auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
     h1 { color: #1a73e8; text-align: center; margin-bottom: 10px; }
-    p.subtitle { color: #666; text-align: center; margin-bottom: 30px; }
+    .header { text-align: center; margin-bottom: 30px; }
+    .person-info { font-size: 18px; font-weight: bold; color: #1a73e8; margin-bottom: 20px; }
     form { display: flex; flex-direction: column; gap: 20px; text-align: left; }
     label { font-weight: 500; }
     input { padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
-    button { background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 6px; font-size: 16px; cursor: pointer; transition: background 0.3s; }
+    button { background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 6px; font-size: 16px; cursor: pointer; }
     button:hover { background: #0d5bd9; }
     button:disabled { background: #ccc; cursor: not-allowed; }
-    #result { margin-top: 40px; padding: 20px; background: #e8f0fe; border-radius: 8px; display: none; text-align: center; }
-    .score-container { position: relative; margin: 20px auto; width: 250px; height: 150px; }
+    #result { margin-top: 40px; display: none; }
+    .cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; margin-bottom: 30px; }
+    .card { background: #f8f9fa; border-radius: 8px; padding: 20px; width: 220px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .card-title { font-size: 14px; color: #666; margin-bottom: 8px; }
+    .card-value { font-size: 24px; font-weight: bold; }
+    .normal { color: #28a745; }
+    .risk { color: #dc3545; }
+    .gauge-container { position: relative; margin: 20px auto; width: 250px; height: 150px; }
     .score-text { position: absolute; top: 70%; left: 50%; transform: translate(-50%, -50%); font-size: 48px; font-weight: bold; }
-    .error { color: red; }
+    .error { color: red; text-align: center; }
     .info { font-size: 14px; color: #666; margin-top: 30px; text-align: center; }
-    .detail-item { margin-bottom: 12px; text-align: left; }
+    .chart-container { margin-top: 40px; height: 300px; }
     .loading { text-align: center; color: #1a73e8; margin: 20px 0; font-weight: bold; }
     .consent-label { font-size: 14px; color: #555; }
-    .new-query { background: #28a745; margin-top: 20px; }
-    .chart-container { margin-top: 40px; height: 300px; }
+    .new-query { background: #28a745; margin-top: 20px; width: 100%; }
   </style>
 </head>
 <body>
@@ -50,8 +55,26 @@
     <div id="loading" class="loading" style="display:none;">Consultando BCRA... Por favor espera.</div>
 
     <div id="result">
+      <div class="header">
+        <div class="person-info" id="personName">Consultando...</div>
+        <div class="cards">
+          <div class="card">
+            <div class="card-title">Situación Último Mes</div>
+            <div class="card-value" id="situacionMes">—</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Saldo Vigente</div>
+            <div class="card-value" id="saldoVigente">—</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Cheques Rechazados</div>
+            <div class="card-value" id="chequesRechazados">—</div>
+          </div>
+        </div>
+      </div>
+
       <h3>Resultado del Scoring</h3>
-      <div class="score-container">
+      <div class="gauge-container">
         <canvas id="gaugeChart"></canvas>
         <div class="score-text" id="scoreValue">—</div>
       </div>
@@ -69,7 +92,6 @@
   <script>
     let gaugeChart, deudasChart;
 
-    // Habilitar botón
     document.getElementById('consent').addEventListener('change', (e) => {
       document.getElementById('btnConsultar').disabled = !e.target.checked;
     });
@@ -92,29 +114,34 @@
       const scoreValue = document.getElementById('scoreValue');
       const categoryDiv = document.getElementById('category');
       const details = document.getElementById('details');
+      const personName = document.getElementById('personName');
+      const situacionMes = document.getElementById('situacionMes');
+      const saldoVigente = document.getElementById('saldoVigente');
+      const chequesRechazados = document.getElementById('chequesRechazados');
 
       loading.style.display = 'block';
       resultDiv.style.display = 'none';
-      scoreValue.textContent = 'Cargando...';
-      categoryDiv.innerHTML = '';
-      details.innerHTML = '';
 
       try {
         const proxy = '/api/proxy?url=';
         const baseUrl = '/centraldedeudores/v1.0/';
 
+        // 1. Deudas actuales (para situación y saldo)
         let deudasActuales = { deudas: [] };
         const resDeudas = await fetch(proxy + baseUrl + 'Deudas/' + cuil);
         if (resDeudas.ok) deudasActuales = await resDeudas.json();
 
-        let historicas = [];
-        const resHistoricas = await fetch(proxy + baseUrl + 'Deudas/Historicas/' + cuil);
-        if (resHistoricas.ok) historicas = (await resHistoricas.json()).deudas || [];
-
+        // 2. Cheques rechazados
         let cheques = [];
         const resCheques = await fetch(proxy + baseUrl + 'Deudas/ChequesRechazados/' + cuil);
         if (resCheques.ok) cheques = (await resCheques.json()).cheques || [];
 
+        // 3. Deudas históricas para gráfico
+        let historicas = [];
+        const resHistoricas = await fetch(proxy + baseUrl + 'Deudas/Historicas/' + cuil);
+        if (resHistoricas.ok) historicas = (await resHistoricas.json()).deudas || [];
+
+        // Lógica de scoring
         let score = 950;
         let mensajes = [];
 
@@ -147,7 +174,17 @@
                           score >= 701 ? 'Bajo riesgo' :
                           score >= 501 ? 'Riesgo medio' : 'Alto riesgo';
 
-        // Gauge circular (como Tirr)
+        // Mostrar tarjetas como Tirr
+        personName.textContent = `Consultado: CUIL ${cuil}`; // Placeholder (puedes agregar API para nombre real)
+        situacionMes.innerHTML = deudasActuales.deudas?.length > 0 && deudasActuales.deudas.some(d => d.diasAtraso > 0) 
+          ? '<span class="risk">En situación irregular</span>' 
+          : '<span class="normal">En situación normal</span>';
+        saldoVigente.textContent = deudasActuales.deudas?.length > 0 
+          ? `${deudasActuales.deudas.reduce((sum, d) => sum + (d.monto || 0), 0).toLocaleString()} ARS` 
+          : 'ARS 0';
+        chequesRechazados.textContent = cheques.length > 0 ? `${cheques.length} rechazos` : 'Ninguno';
+
+        // Gauge circular
         const gaugeCtx = document.getElementById('gaugeChart').getContext('2d');
         if (gaugeChart) gaugeChart.destroy();
         gaugeChart = new Chart(gaugeCtx, {
@@ -155,10 +192,7 @@
           data: {
             datasets: [{
               data: [score, 1000 - score],
-              backgroundColor: [
-                getGaugeColor(score),
-                '#e9ecef'
-              ],
+              backgroundColor: [getGaugeColor(score), '#e9ecef'],
               borderWidth: 0
             }]
           },
@@ -180,7 +214,6 @@
         const deudasCtx = document.getElementById('deudasChart').getContext('2d');
         if (deudasChart) deudasChart.destroy();
 
-        // Datos para el gráfico (de historicas)
         const labels = historicas.map(h => h.fecha || 'Mes');
         const valores = historicas.map(h => h.monto || 0);
 
