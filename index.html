@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>ScoreInqui - Scoring BCRA</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Chart.js CDN para gauge y gráfico -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: 'Inter', sans-serif; background: #f8f9fa; margin: 0; padding: 0; color: #333; }
-    .container { max-width: 600px; margin: 80px auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+    .container { max-width: 700px; margin: 80px auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
     h1 { color: #1a73e8; text-align: center; margin-bottom: 10px; }
     p.subtitle { color: #666; text-align: center; margin-bottom: 30px; }
     form { display: flex; flex-direction: column; gap: 20px; text-align: left; }
@@ -16,14 +18,16 @@
     button { background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 6px; font-size: 16px; cursor: pointer; transition: background 0.3s; }
     button:hover { background: #0d5bd9; }
     button:disabled { background: #ccc; cursor: not-allowed; }
-    #result { margin-top: 40px; padding: 20px; background: #e8f0fe; border-radius: 8px; display: none; }
-    .score { font-size: 48px; font-weight: bold; text-align: center; margin: 0 0 20px; }
-    .error { color: red; text-align: center; }
+    #result { margin-top: 40px; padding: 20px; background: #e8f0fe; border-radius: 8px; display: none; text-align: center; }
+    .score-container { position: relative; margin: 20px auto; width: 250px; height: 150px; }
+    .score-text { position: absolute; top: 70%; left: 50%; transform: translate(-50%, -50%); font-size: 48px; font-weight: bold; }
+    .error { color: red; }
     .info { font-size: 14px; color: #666; margin-top: 30px; text-align: center; }
-    .detail-item { margin-bottom: 12px; }
+    .detail-item { margin-bottom: 12px; text-align: left; }
     .loading { text-align: center; color: #1a73e8; margin: 20px 0; font-weight: bold; }
     .consent-label { font-size: 14px; color: #555; }
     .new-query { background: #28a745; margin-top: 20px; }
+    .chart-container { margin-top: 40px; height: 300px; }
   </style>
 </head>
 <body>
@@ -47,9 +51,15 @@
 
     <div id="result">
       <h3>Resultado del Scoring</h3>
-      <div class="score" id="scoreValue">—</div>
+      <div class="score-container">
+        <canvas id="gaugeChart"></canvas>
+        <div class="score-text" id="scoreValue">—</div>
+      </div>
       <div id="category"></div>
       <div id="details"></div>
+      <div class="chart-container">
+        <canvas id="deudasChart"></canvas>
+      </div>
       <button class="new-query" onclick="resetForm()">Nueva consulta</button>
     </div>
 
@@ -57,7 +67,9 @@
   </div>
 
   <script>
-    // Habilitar botón solo si acepta consentimiento
+    let gaugeChart, deudasChart;
+
+    // Habilitar botón
     document.getElementById('consent').addEventListener('change', (e) => {
       document.getElementById('btnConsultar').disabled = !e.target.checked;
     });
@@ -67,6 +79,8 @@
       document.getElementById('result').style.display = 'none';
       document.getElementById('btnConsultar').disabled = true;
       document.getElementById('consent').checked = false;
+      if (gaugeChart) gaugeChart.destroy();
+      if (deudasChart) deudasChart.destroy();
     }
 
     document.getElementById('form').addEventListener('submit', async (e) => {
@@ -104,7 +118,6 @@
         let score = 950;
         let mensajes = [];
 
-        // Deudas actuales
         if (deudasActuales.deudas?.length > 0) {
           const tieneAtraso = deudasActuales.deudas.some(d => d.diasAtraso > 0);
           if (tieneAtraso) {
@@ -115,7 +128,6 @@
           mensajes.push(`Deuda total actual: ${totalDeuda.toLocaleString()} pesos`);
         }
 
-        // Históricas
         if (historicas.length > 0) {
           const historicoAtrasos = historicas.filter(h => h.diasAtraso > 0).length;
           if (historicoAtrasos > 0) {
@@ -124,7 +136,6 @@
           }
         }
 
-        // Cheques rechazados
         if (cheques.length > 0) {
           score -= 200;
           mensajes.push(`Alto riesgo: ${cheques.length} cheque(s) rechazado(s)`);
@@ -136,20 +147,82 @@
                           score >= 701 ? 'Bajo riesgo' :
                           score >= 501 ? 'Riesgo medio' : 'Alto riesgo';
 
+        // Gauge circular (como Tirr)
+        const gaugeCtx = document.getElementById('gaugeChart').getContext('2d');
+        if (gaugeChart) gaugeChart.destroy();
+        gaugeChart = new Chart(gaugeCtx, {
+          type: 'doughnut',
+          data: {
+            datasets: [{
+              data: [score, 1000 - score],
+              backgroundColor: [
+                getGaugeColor(score),
+                '#e9ecef'
+              ],
+              borderWidth: 0
+            }]
+          },
+          options: {
+            cutout: '70%',
+            rotation: -90,
+            circumference: 180,
+            plugins: { legend: { display: false } }
+          }
+        });
         scoreValue.textContent = score;
         categoryDiv.innerHTML = `<strong>Categoría:</strong> ${categoria}`;
+
         details.innerHTML = mensajes.length > 0 
           ? mensajes.map(m => `<div class="detail-item">${m}</div>`).join('')
           : '<div class="detail-item">Sin incidencias registradas</div>';
+
+        // Gráfico de deudas históricas
+        const deudasCtx = document.getElementById('deudasChart').getContext('2d');
+        if (deudasChart) deudasChart.destroy();
+
+        // Datos para el gráfico (de historicas)
+        const labels = historicas.map(h => h.fecha || 'Mes');
+        const valores = historicas.map(h => h.monto || 0);
+
+        deudasChart = new Chart(deudasCtx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Deuda histórica',
+              data: valores,
+              borderColor: '#1a73e8',
+              backgroundColor: 'rgba(26, 115, 232, 0.2)',
+              tension: 0.4,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: { beginAtZero: true, title: { display: true, text: 'Monto (ARS)' } },
+              x: { title: { display: true, text: 'Fecha' } }
+            },
+            plugins: { legend: { display: false } }
+          }
+        });
+
+        resultDiv.style.display = 'block';
 
       } catch (err) {
         scoreValue.textContent = 'Error';
         details.innerHTML = `<span class="error">Error al conectar con BCRA: ${err.message}</span>`;
       } finally {
         loading.style.display = 'none';
-        resultDiv.style.display = 'block';
       }
     });
+
+    function getGaugeColor(score) {
+      if (score >= 851) return '#28a745'; // Verde
+      if (score >= 701) return '#ffc107'; // Amarillo
+      if (score >= 501) return '#fd7e14'; // Naranja
+      return '#dc3545'; // Rojo
+    }
   </script>
 </body>
 </html>
