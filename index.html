@@ -87,7 +87,7 @@
       <button class="new-query" onclick="resetForm()">Nueva consulta</button>
     </div>
 
-    <p class="info">Datos públicos de Central de Deudores del BCRA. Próximamente: Prometeo para datos bancarios (con consentimiento).</p>
+    <p class="info">Fuente: Banco Central de la República Argentina</p>
   </div>
 
   <script>
@@ -131,8 +131,7 @@
       resultDiv.style.display = 'none';
 
       try {
-        // Fetch al proxy en Render (scrapea la web del BCRA)
-        const proxy = 'https://bcra-proxy-scoring.onrender.com/proxy?cuit=';
+        const proxy = 'https://bcra-proxy-scoring.onrender.com/consulta?cuit=';
         const res = await fetch(proxy + cuit);
         if (!res.ok) throw new Error('Error al consultar BCRA');
 
@@ -143,24 +142,25 @@
 
         let score = 950;
         let mensajes = [];
+        let totalDeuda = 0;
 
         if (data.deudas?.length > 0) {
-          const tieneAtraso = data.deudas.some(d => d.atraso > 0 || d.situacion !== '1');
+          const tieneAtraso = data.deudas.some(d => d.atraso !== 'N/A' && parseInt(d.atraso) > 0);
           if (tieneAtraso) {
             score -= 200;
             mensajes.push(`Riesgo medio: ${data.deudas.length} deuda(s)`);
           }
 
-          const totalDeuda = data.deudas.reduce((sum, d) => sum + (parseInt(d.monto.replace(/\D/g, '')) || 0), 0);
-          deudaTotal.textContent = `${(totalDeuda / 1000).toFixed(0)} mil ARS`;
-          mensajes.push(`Deuda total: ${totalDeuda.toLocaleString()} pesos`);
-
-          // Mostrar entidades
           data.deudas.forEach(d => {
-            mensajes.push(`Deuda en ${d.entidad}: ${d.monto} ARS (${d.periodo}) - Situación: ${d.situacion}`);
+            const montoNum = parseInt(d.monto.replace(/\D/g, '')) || 0;
+            totalDeuda += montoNum;
+            mensajes.push(`Deuda en ${d.entidad}: ${montoNum} ARS (${d.periodo}) - Situación: ${d.situacion}`);
           });
+
+          deudaTotal.textContent = `${(totalDeuda / 1000).toFixed(0)} mil ARS`;
         } else {
           deudaTotal.textContent = 'ARS 0';
+          mensajes.push('Sin deudas registradas');
         }
 
         situacionMes.innerHTML = mensajes.some(m => m.includes('riesgo')) 
