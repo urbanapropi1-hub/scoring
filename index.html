@@ -131,8 +131,8 @@
       resultDiv.style.display = 'none';
 
       try {
-        const proxy = '/api/proxy?url=';
-        const baseUrl = '/centraldedeudores/v1.0/';
+        const proxy = 'https://cors-anywhere.herokuapp.com/';
+        const baseUrl = 'https://api.bcra.gob.ar/centraldedeudores/v1.0/';
 
         let deudasActuales = { deudas: [] };
         const resDeudas = await fetch(proxy + baseUrl + 'Deudas/' + cuil);
