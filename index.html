@@ -62,7 +62,7 @@
         <p><strong>Dirección:</strong> <span id="afipDireccion">—</span></p>
         <p><strong>Localidad/Provincia:</strong> <span id="afipLocalidad">—</span></p>
         <p><strong>CUIT/CUIL:</strong> <span id="afipCuit">—</span></p>
-        <p id="afipError" style="color: red; display: none;"></p>
+        <p id="afipMessage" style="color: #666; font-style: italic; margin-top: 10px;">Fuente: Padrón de AFIP</p>
       </div>
 
       <div class="header">
@@ -130,17 +130,18 @@
       document.getElementById('afipDireccion').textContent = '—';
       document.getElementById('afipLocalidad').textContent = '—';
       document.getElementById('afipCuit').textContent = '—';
-      document.getElementById('afipError').style.display = 'none';
+      document.getElementById('afipMessage').textContent = 'Fuente: Padrón de AFIP';
+      document.getElementById('afipMessage').style.color = '#666';
     }
 
-    // Función para consultar AFIP
+    // Función mejorada para consultar AFIP (usa la API que trae datos para tu CUIL)
     async function consultarAFIP(cuilInput) {
       try {
         const cuil = cuilInput.replace(/-/g, '').trim();
 
-        let cuitPrincipal;
+        let cuitPrincipal = cuil;
 
-        // Si parece DNI (7-8 dígitos), buscar CUIL/CUIT asociados
+        // Si es DNI (7-8 dígitos), buscar CUIL asociado
         if (cuil.length <= 8) {
           const resPersonas = await fetch(`https://soa.afip.gob.ar/sr-padron/v2/personas/${cuil}`);
           if (resPersonas.ok) {
@@ -149,19 +150,15 @@
               cuitPrincipal = dataPersonas[0];
             }
           }
-        } else {
-          cuitPrincipal = cuil;
-        }
-
-        if (!cuitPrincipal) {
-          throw new Error('No se encontró CUIT/CUIL asociado');
         }
 
         // Consultar datos completos
         const resPersona = await fetch(`https://soa.afip.gob.ar/sr-padron/v2/persona/${cuitPrincipal}`);
         if (resPersona.ok) {
           const data = await resPersona.json();
-
+          if (!data.denominacion) {
+            throw new Error('No se encontraron datos públicos');
+          }
           return {
             nombre: data.denominacion || 'No disponible',
             tipo: data.tipoPersona === 'FISICA' ? 'Persona Física' : 'Persona Jurídica',
@@ -208,7 +205,8 @@
           document.getElementById('afipDireccion').textContent = afipData.direccion;
           document.getElementById('afipLocalidad').textContent = `${afipData.localidad}, ${afipData.provincia}`;
           document.getElementById('afipCuit').textContent = afipData.cuit;
-          document.getElementById('afipError').style.display = 'none';
+          document.getElementById('afipMessage').textContent = 'Fuente: Padrón de AFIP';
+          document.getElementById('afipMessage').style.color = '#666';
         } else {
           document.getElementById('afipNombre').textContent = 'No disponible';
           document.getElementById('afipTipo').textContent = '—';
@@ -216,11 +214,11 @@
           document.getElementById('afipDireccion').textContent = '—';
           document.getElementById('afipLocalidad').textContent = '—';
           document.getElementById('afipCuit').textContent = '—';
-          document.getElementById('afipError').textContent = afipData.error;
-          document.getElementById('afipError').style.display = 'block';
+          document.getElementById('afipMessage').textContent = 'No se encontraron datos públicos en AFIP para este CUIL/DNI.';
+          document.getElementById('afipMessage').style.color = '#dc3545';
         }
 
-        // 2. Consultar BCRA
+        // 2. Consultar BCRA (como antes)
         const proxy = 'https://bcra-proxy-scoring.onrender.com/proxy?url=';
         const baseUrl = '/centraldedeudores/v1.0/';
 
