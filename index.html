@@ -48,11 +48,11 @@
       <input type="text" id="cuil" placeholder="Ej: 20123456789" required pattern="\d{7,11}">
       
       <label class="consent-label">
-        <input type="checkbox" id="consent">
+        <input type="checkbox" id="consent" checked> <!-- Tildado por default para pruebas -->
         Autorizo la consulta de datos públicos del BCRA y entiendo que no incluye datos privados ni bancarios.
       </label>
       
-      <button type="submit" id="btnConsultar" disabled>Consultar</button>
+      <button type="submit" id="btnConsultar">Consultar</button> <!-- Sin disabled por default -->
     </form>
 
     <div id="loading" class="loading" style="display:none;">Consultando BCRA... Por favor espera.</div>
@@ -111,19 +111,24 @@
       'HSBC': 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/HSBC_logo.svg/512px-HSBC_logo.svg.png'
     };
 
-    // Habilitar botón solo si checkbox está marcado
+    // Habilitar botón al cargar y al cambiar checkbox
     const consent = document.getElementById('consent');
     const btnConsultar = document.getElementById('btnConsultar');
 
-    consent.addEventListener('change', () => {
+    function updateButton() {
       btnConsultar.disabled = !consent.checked;
-    });
+    }
+
+    // Al cargar la página
+    updateButton();
+
+    // Al cambiar el checkbox
+    consent.addEventListener('change', updateButton);
 
     function resetForm() {
       document.getElementById('form').reset();
       document.getElementById('result').style.display = 'none';
-      btnConsultar.disabled = true;
-      consent.checked = false;
+      updateButton();
       if (gaugeChart) gaugeChart.destroy();
       if (deudasChart) deudasChart.destroy();
       document.getElementById('noDataMessage').style.display = 'none';
